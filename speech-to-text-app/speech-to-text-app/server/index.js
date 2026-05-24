@@ -1,10 +1,11 @@
+import dotenv from 'dotenv'
+dotenv.config()
+console.log('OpenAI Key:', process.env.OPENAI_API_KEY)
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import connectDB from './config/db.js'
 import transcriptionRoutes from './routes/transcriptionRoutes.js'
 
-dotenv.config()
 connectDB()
 
 const app = express()

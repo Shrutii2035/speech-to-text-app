@@ -10,8 +10,13 @@ const api = axios.create({
 })
 
 // Save transcript text to MongoDB
-export const saveTranscription = async (transcript, language = 'en') => {
-  const response = await api.post('/save', { transcript, language })
+export const saveTranscription = async (transcript, language = 'en', duration = 0, source = 'recording') => {
+  const response = await api.post('/save', { 
+    transcript, 
+    language, 
+    duration,
+    source
+  })
   return response.data
 }
 
@@ -26,8 +31,14 @@ export const uploadAudio = async (audioBlob) => {
   return response.data
 }
 
-// Get all transcriptions history
+// Get all transcriptions
 export const getTranscriptions = async () => {
   const response = await api.get('/')
+  return response.data
+}
+
+// Delete a transcription
+export const deleteTranscription = async (id) => {
+  const response = await api.delete(`/${id}`)
   return response.data
 }

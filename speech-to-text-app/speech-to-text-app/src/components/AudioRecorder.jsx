@@ -4,29 +4,30 @@ import { saveTranscription, uploadAudio } from '../services/api'
 const AudioRecorder = ({ onTranscriptSaved }) => {
   const [isRecording, setIsRecording] = useState(false)
   const [transcript, setTranscript] = useState('')
-const transcriptRef = useRef('')
   const [status, setStatus] = useState('idle')
-  
+  const [duration, setDuration] = useState(0)
+
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recognitionRef = useRef(null)
+  const transcriptRef = useRef('')
+  const timerRef = useRef(null)
 
   const startRecording = async () => {
     try {
       setStatus('recording')
+      setTranscript('')
+      transcriptRef.current = ''
+      setDuration(0)
       audioChunksRef.current = []
 
-      // 1. Start MediaRecorder for audio file
+      timerRef.current = setInterval(() => setDuration(prev => prev + 1), 1000)
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaRecorderRef.current = new MediaRecorder(stream)
-      
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        audioChunksRef.current.push(e.data)
-      }
-      
+      mediaRecorderRef.current.ondataavailable = (e) => audioChunksRef.current.push(e.data)
       mediaRecorderRef.current.start()
 
-      // 2. Start Web Speech API for transcription
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
       recognitionRef.current = new SpeechRecognition()
       recognitionRef.current.continuous = true
@@ -34,21 +35,18 @@ const transcriptRef = useRef('')
       recognitionRef.current.lang = 'en-US'
 
       recognitionRef.current.onresult = (event) => {
-        let finalTranscript = ''
+        let final = ''
         for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript
-          }
+          if (event.results[i].isFinal) final += event.results[i][0].transcript
         }
-        setTranscript(finalTranscript)
-transcriptRef.current = finalTranscript
+        setTranscript(final)
+        transcriptRef.current = final
       }
 
       recognitionRef.current.start()
       setIsRecording(true)
-
     } catch (error) {
-      console.error('Error starting recording:', error)
+      console.error(error)
       setStatus('error')
     }
   }
@@ -57,64 +55,103 @@ transcriptRef.current = finalTranscript
     try {
       setStatus('saving')
       setIsRecording(false)
-
-      // Stop Web Speech API
+      clearInterval(timerRef.current)
       recognitionRef.current?.stop()
-
-      // Stop MediaRecorder
       mediaRecorderRef.current?.stop()
 
       mediaRecorderRef.current.onstop = async () => {
-        // Create audio blob
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-
-        // Upload audio to Supabase
         await uploadAudio(audioBlob)
-
-        // Save transcript to MongoDB
-        await saveTranscription(transcriptRef.current || 'No transcript captured')
-
+        await saveTranscription(transcriptRef.current || 'No transcript captured', 'en', duration, 'recording')
         setStatus('saved')
         onTranscriptSaved?.()
       }
-
     } catch (error) {
-      console.error('Error stopping recording:', error)
+      console.error(error)
       setStatus('error')
     }
   }
 
+  const reset = () => {
+    setStatus('idle')
+    setTranscript('')
+    setDuration(0)
+    transcriptRef.current = ''
+  }
+
+  const formatDuration = (secs) =>
+    `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+
   return (
-    <div className="flex flex-col items-center gap-6 p-8 rounded-2xl" style={{ background: '#fff', border: '0.5px solid #d1e8d8' }}>
-  <h2 className="text-xl font-medium" style={{ color: '#0F6E56' }}>Voice Recorder</h2>
+    <div style={{ background: '#fff', border: '0.5px solid #CECBF6', borderRadius: '12px', padding: '28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+
+      {/* Title */}
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ fontSize: '16px', fontWeight: '500', color: '#26215C' }}>Voice Recorder</p>
+        <p style={{ fontSize: '13px', color: '#AFA9EC', marginTop: '2px' }}>Speak clearly into your microphone</p>
+      </div>
+
+      {/* Timer */}
+      {isRecording && (
+        <div style={{ fontSize: '32px', fontWeight: '500', color: '#534AB7', fontFamily: 'monospace' }}>
+          {formatDuration(duration)}
+        </div>
+      )}
 
       {/* Status */}
-      <div className="text-sm font-medium text-gray-500">
-        {status === 'idle' && 'Press record to start'}
-        {status === 'recording' && '🔴 Recording...'}
-        {status === 'saving' && '💾 Saving...'}
-        {status === 'saved' && '✅ Saved!'}
-        {status === 'error' && '❌ Error occurred'}
+      <div style={{ fontSize: '13px', color: '#AFA9EC', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {status === 'idle' && <><i className="ti ti-microphone-2"/>&nbsp;Press the button to start</>}
+        {status === 'recording' && (
+          <><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#e53e3e', display: 'inline-block' }}/>&nbsp;Recording in progress...</>
+        )}
+        {status === 'saving' && <><i className="ti ti-loader"/>&nbsp;Saving...</>}
+        {status === 'saved' && <><i className="ti ti-circle-check" style={{ color: '#534AB7' }}/>&nbsp;Saved successfully!</>}
+        {status === 'error' && <><i className="ti ti-circle-x" style={{ color: '#e53e3e' }}/>&nbsp;Something went wrong</>}
       </div>
 
       {/* Record Button */}
       <button
-      style={{ background: isRecording ? '#e53e3e' : '#1D9E75', border: '4px solid #9FE1CB' }}
         onClick={isRecording ? stopRecording : startRecording}
-        className={`w-24 h-24 rounded-full text-white text-4xl font-bold shadow-lg transition-all duration-300 ${
-         isRecording 
-  ? 'scale-110 animate-pulse' 
-  : ''
-        }`}
+        disabled={status === 'saving'}
+        style={{
+          width: '80px', height: '80px', borderRadius: '50%',
+          background: isRecording ? '#e53e3e' : '#534AB7',
+          border: `4px solid ${isRecording ? '#fdb5b5' : '#CECBF6'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: status === 'saving' ? 'not-allowed' : 'pointer',
+          transform: isRecording ? 'scale(1.1)' : 'scale(1)',
+          transition: 'all 0.2s ease'
+        }}
       >
-        {isRecording ? '⏹' : '🎤'}
+        <i className={`ti ${isRecording ? 'ti-player-stop' : 'ti-microphone'}`}
+          style={{ fontSize: '28px', color: '#fff' }}/>
       </button>
 
       {/* Live Transcript */}
       {transcript && (
-        <div className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200">
-          <p className="text-sm font-medium text-gray-500 mb-2">Live Transcript:</p>
-          <p className="text-gray-800">{transcript}</p>
+        <div style={{ width: '100%', background: '#F8F7FE', border: '0.5px solid #CECBF6', borderRadius: '8px', padding: '12px' }}>
+          <p style={{ fontSize: '11px', fontWeight: '500', color: '#534AB7', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+            Live transcript
+          </p>
+          <p style={{ fontSize: '13px', color: '#26215C', lineHeight: '1.7' }}>{transcript}</p>
+        </div>
+      )}
+
+      {/* Actions */}
+      {status === 'saved' && (
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => navigator.clipboard.writeText(transcript)}
+            style={{ background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #CECBF6', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+          >
+            <i className="ti ti-copy"/>Copy
+          </button>
+          <button
+            onClick={reset}
+            style={{ background: '#F8F7FE', color: '#AFA9EC', border: '0.5px solid #CECBF6', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+          >
+            <i className="ti ti-refresh"/>Record again
+          </button>
         </div>
       )}
     </div>

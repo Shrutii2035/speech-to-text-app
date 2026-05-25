@@ -4,17 +4,22 @@ import { supabase } from '../config/supabase.js'
 
 export const saveTranscription = async (req, res) => {
   try {
-    const { transcript, language, audioBlob } = req.body
+    const { transcript, language, duration, source } = req.body
 
     if (!transcript) {
       return res.status(400).json({ error: 'No transcript provided' })
     }
 
-    // Save to MongoDB
+    // Calculate word count
+    const wordCount = transcript.trim().split(/\s+/).length
+
     const record = await Transcription.create({
-      originalFilename: `recording-${Date.now()}.webm`,
+      originalFilename: `${source || 'recording'}-${Date.now()}.webm`,
       transcript,
-      language: language || 'en'
+      language: language || 'en',
+      duration: duration || 0,
+      wordCount,
+      source: source || 'recording'
     })
 
     res.status(201).json({ success: true, data: record })
@@ -31,7 +36,6 @@ export const uploadAudio = async (req, res) => {
       return res.status(400).json({ error: 'No audio file provided' })
     }
 
-    // Upload to Supabase
     const fileBuffer = fs.readFileSync(req.file.path)
     const fileName = `recordings/${req.file.filename}`
 
@@ -43,12 +47,10 @@ export const uploadAudio = async (req, res) => {
 
     if (uploadError) throw new Error(uploadError.message)
 
-    // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('audio-files')
       .getPublicUrl(fileName)
 
-    // Delete local file
     fs.unlinkSync(req.file.path)
 
     res.status(200).json({ success: true, audioUrl: publicUrl })
@@ -61,8 +63,20 @@ export const uploadAudio = async (req, res) => {
 
 export const getTranscriptions = async (req, res) => {
   try {
-    const records = await Transcription.find().sort({ createdAt: -1 })
+    const records = await Transcription.find()
+      .sort({ createdAt: -1 })
+      .limit(50)
+    
     res.status(200).json({ success: true, data: records })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+}
+
+export const deleteTranscription = async (req, res) => {
+  try {
+    await Transcription.findByIdAndDelete(req.params.id)
+    res.status(200).json({ success: true, message: 'Deleted successfully' })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

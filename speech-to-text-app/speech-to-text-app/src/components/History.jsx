@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getTranscriptions } from '../services/api'
+import { getTranscriptions, deleteTranscription } from '../services/api'
 
 const History = ({ refresh }) => {
   const [transcriptions, setTranscriptions] = useState([])
@@ -11,80 +11,124 @@ const History = ({ refresh }) => {
       const response = await getTranscriptions()
       setTranscriptions(response.data)
     } catch (error) {
-      console.error('Error fetching history:', error)
+      console.error(error)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchHistory()
-  }, [refresh])
+  useEffect(() => { fetchHistory() }, [refresh])
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const handleDelete = async (id) => {
+    try {
+      await deleteTranscription(id)
+      setTranscriptions(prev => prev.filter(item => item._id !== id))
+    } catch (error) {
+      console.error(error)
+    }
   }
 
+  const formatDate = (dateString) => new Date(dateString).toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  })
+
   return (
-    <div className="w-full p-6 bg-white rounded-2xl shadow-lg">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">📜 History</h2>
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div>
+          <p style={{ fontSize: '16px', fontWeight: '500', color: '#26215C' }}>Transcription history</p>
+          <p style={{ fontSize: '12px', color: '#AFA9EC', marginTop: '2px' }}>
+            {transcriptions.length} transcription{transcriptions.length !== 1 ? 's' : ''} saved
+          </p>
+        </div>
         <button
           onClick={fetchHistory}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm rounded-lg transition-all"
+          style={{ background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #CECBF6', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
         >
-          🔄 Refresh
+          <i className="ti ti-refresh"/>Refresh
         </button>
       </div>
 
-      {/* Loading */}
+      {/* Loading Skeleton */}
       {loading && (
-        <div className="flex justify-center py-8">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"/>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ background: '#fff', border: '0.5px solid #CECBF6', borderRadius: '12px', padding: '16px', height: '120px', opacity: 0.5 }}/>
+          ))}
         </div>
       )}
 
       {/* Empty State */}
       {!loading && transcriptions.length === 0 && (
-        <div className="text-center py-8 text-gray-400">
-          <p className="text-4xl mb-3">🎤</p>
-          <p>No transcriptions yet. Start recording!</p>
+        <div style={{ background: '#fff', border: '0.5px solid #CECBF6', borderRadius: '12px', padding: '48px', textAlign: 'center' }}>
+          <i className="ti ti-microphone-off" style={{ fontSize: '40px', color: '#CECBF6', display: 'block', marginBottom: '12px' }}/>
+          <p style={{ fontWeight: '500', color: '#26215C', marginBottom: '4px' }}>No transcriptions yet</p>
+          <p style={{ fontSize: '13px', color: '#AFA9EC' }}>Start recording or upload an audio file</p>
         </div>
       )}
 
-      {/* Transcription List */}
+      {/* Cards */}
       {!loading && transcriptions.length > 0 && (
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {transcriptions.map((item) => (
-            <div
-              key={item._id}
-              className="p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-blue-200 transition-all"
+            <div key={item._id}
+              style={{ background: '#fff', border: '0.5px solid #CECBF6', borderRadius: '12px', padding: '16px', transition: 'border-color 0.2s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = '#7F77DD'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#CECBF6'}
             >
-              <div className="flex justify-between items-start mb-2">
-                <span className="text-xs font-medium text-blue-500 bg-blue-50 px-2 py-1 rounded-full">
-                  {item.language.toUpperCase()}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {formatDate(item.createdAt)}
-                </span>
+              {/* Card Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ background: '#EEEDFE', color: '#3C3489', fontSize: '11px', padding: '3px 10px', borderRadius: '20px', border: '0.5px solid #CECBF6', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <i className={`ti ${item.source === 'upload' ? 'ti-upload' : 'ti-microphone'}`} style={{ fontSize: '10px' }}/>
+                    {item.source === 'upload' ? 'Upload' : 'Recording'}
+                  </span>
+                  <span style={{ background: '#F8F7FE', color: '#AFA9EC', fontSize: '11px', padding: '3px 10px', borderRadius: '20px', border: '0.5px solid #CECBF6' }}>
+                    {item.language?.toUpperCase()}
+                  </span>
+                  {item.wordCount > 0 && (
+                    <span style={{ background: '#F8F7FE', color: '#AFA9EC', fontSize: '11px', padding: '3px 10px', borderRadius: '20px', border: '0.5px solid #CECBF6', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <i className="ti ti-writing" style={{ fontSize: '10px' }}/>
+                      {item.wordCount} words
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '11px', color: '#CECBF6' }}>{formatDate(item.createdAt)}</span>
               </div>
-              <p className="text-gray-800 leading-relaxed">{item.transcript}</p>
-              <div className="mt-2 flex justify-between items-center">
-                <span className="text-xs text-gray-400">
-                  📁 {item.originalFilename}
+
+              {/* Transcript */}
+              <p style={{ fontSize: '13px', color: '#26215C', lineHeight: '1.7', marginBottom: '12px' }}>
+                {item.transcript}
+              </p>
+
+              {/* Audio Player */}
+              {item.audioUrl && (
+                <div style={{ marginBottom: '12px' }}>
+                  <audio controls src={item.audioUrl} style={{ width: '100%', height: '32px', accentColor: '#534AB7' }}/>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '0.5px solid #EEEDFE' }}>
+                <span style={{ fontSize: '11px', color: '#CECBF6', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <i className="ti ti-file" style={{ fontSize: '11px' }}/>{item.originalFilename}
                 </span>
-                <button
-                  onClick={() => navigator.clipboard.writeText(item.transcript)}
-                  className="text-xs text-gray-400 hover:text-blue-500 transition-all"
-                >
-                  📋 Copy
-                </button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(item.transcript)}
+                    style={{ background: '#F8F7FE', color: '#AFA9EC', border: '0.5px solid #CECBF6', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <i className="ti ti-copy"/>Copy
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item._id)}
+                    style={{ background: '#fff0f0', color: '#e53e3e', border: '0.5px solid #ffd0d0', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <i className="ti ti-trash"/>Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))}

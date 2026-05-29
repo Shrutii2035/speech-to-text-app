@@ -4,6 +4,7 @@ import { saveTranscription, uploadAudio } from '../services/api'
 const AudioRecorder = ({ onTranscriptSaved }) => {
   const [isRecording, setIsRecording] = useState(false)
   const [transcript, setTranscript] = useState('')
+  const [interimTranscript, setInterimTranscript] = useState('')
   const [status, setStatus] = useState('idle')
   const [duration, setDuration] = useState(0)
 
@@ -17,6 +18,7 @@ const AudioRecorder = ({ onTranscriptSaved }) => {
     try {
       setStatus('recording')
       setTranscript('')
+      setInterimTranscript('')
       transcriptRef.current = ''
       setDuration(0)
       audioChunksRef.current = []
@@ -36,15 +38,28 @@ const AudioRecorder = ({ onTranscriptSaved }) => {
 
       recognitionRef.current.onresult = (event) => {
         let final = ''
+        let interim = ''
         for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) final += event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript + ' '
+          } else {
+            interim += event.results[i][0].transcript
+          }
         }
+        // Update both final and interim in real time
         setTranscript(final)
+        setInterimTranscript(interim)
         transcriptRef.current = final
+      }
+
+      recognitionRef.current.onend = () => {
+        // Auto restart if still recording
+        if (isRecording) recognitionRef.current?.start()
       }
 
       recognitionRef.current.start()
       setIsRecording(true)
+
     } catch (error) {
       console.error(error)
       setStatus('error')
@@ -55,6 +70,7 @@ const AudioRecorder = ({ onTranscriptSaved }) => {
     try {
       setStatus('saving')
       setIsRecording(false)
+      setInterimTranscript('')
       clearInterval(timerRef.current)
       recognitionRef.current?.stop()
       mediaRecorderRef.current?.stop()
@@ -62,7 +78,10 @@ const AudioRecorder = ({ onTranscriptSaved }) => {
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         await uploadAudio(audioBlob)
-        await saveTranscription(transcriptRef.current || 'No transcript captured', 'en', duration, 'recording')
+        await saveTranscription(
+          transcriptRef.current.trim() || 'No transcript captured',
+          'en', duration, 'recording'
+        )
         setStatus('saved')
         onTranscriptSaved?.()
       }
@@ -75,6 +94,7 @@ const AudioRecorder = ({ onTranscriptSaved }) => {
   const reset = () => {
     setStatus('idle')
     setTranscript('')
+    setInterimTranscript('')
     setDuration(0)
     transcriptRef.current = ''
   }
@@ -83,77 +103,103 @@ const AudioRecorder = ({ onTranscriptSaved }) => {
     `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
 
   return (
-    <div style={{ background: '#fff', border: '0.5px solid #CECBF6', borderRadius: '12px', padding: '28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+    <div style={{ background: '#fff', border: '0.5px solid #CECBF6', borderRadius: '12px', padding: '24px' }}>
 
-      {/* Title */}
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '16px', fontWeight: '500', color: '#26215C' }}>Voice Recorder</p>
-        <p style={{ fontSize: '13px', color: '#AFA9EC', marginTop: '2px' }}>Speak clearly into your microphone</p>
-      </div>
-
-      {/* Timer */}
-      {isRecording && (
-        <div style={{ fontSize: '32px', fontWeight: '500', color: '#534AB7', fontFamily: 'monospace' }}>
-          {formatDuration(duration)}
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <p style={{ fontSize: '15px', fontWeight: '500', color: '#26215C' }}>Voice recorder</p>
+          <p style={{ fontSize: '12px', color: '#AFA9EC', marginTop: '2px' }}>Click mic to start recording</p>
         </div>
-      )}
-
-      {/* Status */}
-      <div style={{ fontSize: '13px', color: '#AFA9EC', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {status === 'idle' && <><i className="ti ti-microphone-2"/>&nbsp;Press the button to start</>}
-        {status === 'recording' && (
-          <><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#e53e3e', display: 'inline-block' }}/>&nbsp;Recording in progress...</>
-        )}
-        {status === 'saving' && <><i className="ti ti-loader"/>&nbsp;Saving...</>}
-        {status === 'saved' && <><i className="ti ti-circle-check" style={{ color: '#534AB7' }}/>&nbsp;Saved successfully!</>}
-        {status === 'error' && <><i className="ti ti-circle-x" style={{ color: '#e53e3e' }}/>&nbsp;Something went wrong</>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isRecording && (
+            <span style={{ fontSize: '13px', fontWeight: '500', color: '#534AB7', fontFamily: 'monospace' }}>
+              {formatDuration(duration)}
+            </span>
+          )}
+          <span style={{ background: '#EEEDFE', color: '#534AB7', fontSize: '11px', padding: '3px 10px', borderRadius: '20px', border: '0.5px solid #CECBF6' }}>EN</span>
+        </div>
       </div>
 
-      {/* Record Button */}
-      <button
-        onClick={isRecording ? stopRecording : startRecording}
-        disabled={status === 'saving'}
-        style={{
-          width: '80px', height: '80px', borderRadius: '50%',
-          background: isRecording ? '#e53e3e' : '#534AB7',
-          border: `4px solid ${isRecording ? '#fdb5b5' : '#CECBF6'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: status === 'saving' ? 'not-allowed' : 'pointer',
-          transform: isRecording ? 'scale(1.1)' : 'scale(1)',
-          transition: 'all 0.2s ease'
-        }}
-      >
-        <i className={`ti ${isRecording ? 'ti-player-stop' : 'ti-microphone'}`}
-          style={{ fontSize: '28px', color: '#fff' }}/>
-      </button>
+      {/* Main content */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
 
-      {/* Live Transcript */}
-      {transcript && (
-        <div style={{ width: '100%', background: '#F8F7FE', border: '0.5px solid #CECBF6', borderRadius: '8px', padding: '12px' }}>
-          <p style={{ fontSize: '11px', fontWeight: '500', color: '#534AB7', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+        {/* Record Button */}
+        <div style={{ position: 'relative' }}>
+          {isRecording && (
+            <div style={{
+              position: 'absolute', top: '-8px', left: '-8px', right: '-8px', bottom: '-8px',
+              borderRadius: '50%', border: '2px solid #CECBF6',
+              animation: 'ping 1.5s ease infinite',
+            }}/>
+          )}
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={status === 'saving'}
+            style={{
+              width: '88px', height: '88px', borderRadius: '50%',
+              background: isRecording ? '#e53e3e' : '#534AB7',
+              border: `4px solid ${isRecording ? '#F7C1C1' : '#CECBF6'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: status === 'saving' ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease', position: 'relative'
+            }}
+          >
+            <i className={`ti ${status === 'saving' ? 'ti-loader' : isRecording ? 'ti-player-stop' : 'ti-microphone'}`}
+              style={{ fontSize: '32px', color: '#fff' }}/>
+          </button>
+        </div>
+
+        {/* Status */}
+        <div style={{ fontSize: '12px', color: '#AFA9EC', display: 'flex', alignItems: 'center', gap: '5px' }}>
+          {status === 'idle' && <><i className="ti ti-microphone-2"/>Press the button to start</>}
+          {status === 'recording' && (
+            <><span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#e53e3e', display: 'inline-block', animation: 'pulse 1s infinite' }}/>Recording in progress...</>
+          )}
+          {status === 'saving' && <><i className="ti ti-loader"/>Saving your transcription...</>}
+          {status === 'saved' && <><i className="ti ti-circle-check" style={{ color: '#534AB7' }}/>Saved to history!</>}
+          {status === 'error' && <><i className="ti ti-circle-x" style={{ color: '#e53e3e' }}/>Something went wrong</>}
+        </div>
+
+        {/* Real-time Transcript Box */}
+        <div style={{ width: '100%', background: '#F8F7FE', border: `0.5px solid ${isRecording ? '#7F77DD' : '#CECBF6'}`, borderRadius: '8px', padding: '14px', minHeight: '100px', transition: 'border-color 0.2s' }}>
+          <p style={{ fontSize: '10px', fontWeight: '500', color: '#534AB7', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            {isRecording && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#e53e3e', display: 'inline-block', animation: 'pulse 1s infinite' }}/>}
             Live transcript
           </p>
-          <p style={{ fontSize: '13px', color: '#26215C', lineHeight: '1.7' }}>{transcript}</p>
+          {!transcript && !interimTranscript && (
+            <p style={{ fontSize: '13px', color: '#CECBF6', fontStyle: 'italic' }}>
+              {status === 'idle' ? 'Your words will appear here...' : 'Listening...'}
+            </p>
+          )}
+          {/* Final transcript in solid color */}
+          {transcript && (
+            <span style={{ fontSize: '13px', color: '#26215C', lineHeight: '1.7' }}>{transcript}</span>
+          )}
+          {/* Interim transcript in lighter color — real time! */}
+          {interimTranscript && (
+            <span style={{ fontSize: '13px', color: '#AFA9EC', lineHeight: '1.7', fontStyle: 'italic' }}>{interimTranscript}</span>
+          )}
         </div>
-      )}
 
-      {/* Actions */}
-      {status === 'saved' && (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => navigator.clipboard.writeText(transcript)}
-            style={{ background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #CECBF6', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <i className="ti ti-copy"/>Copy
-          </button>
-          <button
-            onClick={reset}
-            style={{ background: '#F8F7FE', color: '#AFA9EC', border: '0.5px solid #CECBF6', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <i className="ti ti-refresh"/>Record again
-          </button>
-        </div>
-      )}
+        {/* Actions after save */}
+        {status === 'saved' && (
+          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <button
+              onClick={() => navigator.clipboard.writeText(transcript)}
+              style={{ flex: 1, background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #CECBF6', padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+            >
+              <i className="ti ti-copy"/>Copy transcript
+            </button>
+            <button
+              onClick={reset}
+              style={{ flex: 1, background: '#F8F7FE', color: '#AFA9EC', border: '0.5px solid #CECBF6', padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+            >
+              <i className="ti ti-refresh"/>Record again
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

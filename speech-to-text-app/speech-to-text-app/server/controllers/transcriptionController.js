@@ -4,16 +4,20 @@ import { supabase } from '../config/supabase.js'
 
 export const saveTranscription = async (req, res) => {
   try {
-    const { transcript, language, duration, source } = req.body
+    const { transcript, language, duration, source, userId } = req.body
 
     if (!transcript) {
       return res.status(400).json({ error: 'No transcript provided' })
     }
 
-    // Calculate word count
+    if (!userId) {
+      return res.status(400).json({ error: 'No user ID provided' })
+    }
+
     const wordCount = transcript.trim().split(/\s+/).length
 
     const record = await Transcription.create({
+      userId,
       originalFilename: `${source || 'recording'}-${Date.now()}.webm`,
       transcript,
       language: language || 'en',
@@ -63,11 +67,19 @@ export const uploadAudio = async (req, res) => {
 
 export const getTranscriptions = async (req, res) => {
   try {
-    const records = await Transcription.find()
+    const { userId } = req.query
+
+    if (!userId) {
+      return res.status(400).json({ error: 'No user ID provided' })
+    }
+
+    // Only fetch transcriptions for this user
+    const records = await Transcription.find({ userId })
       .sort({ createdAt: -1 })
       .limit(50)
-    
+
     res.status(200).json({ success: true, data: records })
+
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

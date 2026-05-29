@@ -1,21 +1,26 @@
 import mongoose from 'mongoose'
 
 const transcriptionSchema = new mongoose.Schema({
-  originalFilename: { 
-    type: String, 
-    required: true 
+  userId: {
+    type: String,
+    required: true,
+    index: true
   },
-  transcript: { 
-    type: String, 
-    required: true 
+  originalFilename: {
+    type: String,
+    required: true
   },
-  audioUrl: { 
+  transcript: {
+    type: String,
+    required: true
+  },
+  audioUrl: {
     type: String,
     default: ''
   },
-  language: { 
-    type: String, 
-    default: 'en' 
+  language: {
+    type: String,
+    default: 'en'
   },
   duration: {
     type: Number,
@@ -30,9 +35,9 @@ const transcriptionSchema = new mongoose.Schema({
     enum: ['recording', 'upload'],
     default: 'recording'
   },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
 })
 

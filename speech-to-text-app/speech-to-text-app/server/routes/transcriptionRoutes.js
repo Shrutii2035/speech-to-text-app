@@ -1,11 +1,6 @@
-import express from 'express'
-import { 
-  saveTranscription, 
-  uploadAudio,
-  getTranscriptions,
-  deleteTranscription
-} from '../controllers/transcriptionController.js'
-import { upload } from '../middleware/upload.js'
+const express = require('express')
+const { saveTranscription, uploadAudio, getTranscriptions, deleteTranscription } = require('../controllers/transcriptionController')
+const { upload } = require('../middleware/upload')
 
 const router = express.Router()
 
@@ -14,4 +9,4 @@ router.post('/upload-audio', upload.single('audio'), uploadAudio)
 router.get('/', getTranscriptions)
 router.delete('/:id', deleteTranscription)
 
-export default router
+module.exports = router

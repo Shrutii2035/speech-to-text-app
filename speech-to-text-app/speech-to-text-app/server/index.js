@@ -1,10 +1,11 @@
-import express from 'express'
-import cors from 'cors'
-import dotenv from 'dotenv'
-import connectDB from './config/db.js'
-import transcriptionRoutes from './routes/transcriptionRoutes.js'
+const express = require('express')
+const cors = require('cors')
+const dotenv = require('dotenv')
+const connectDB = require('./config/db')
+const transcriptionRoutes = require('./routes/transcriptionRoutes')
 
 dotenv.config()
+connectDB()
 
 const app = express()
 
@@ -15,14 +16,8 @@ app.use(cors({
 }))
 
 app.use(express.json())
-
-// Connect DB
-connectDB()
-
-// Routes
 app.use('/api/transcriptions', transcriptionRoutes)
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'Server is running ✅' })
 })
@@ -32,4 +27,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT} 🚀`)
 })
 
-export default app
+module.exports = app

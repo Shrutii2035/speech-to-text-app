@@ -5,6 +5,8 @@ const connectDB = require('./config/db')
 const transcriptionRoutes = require('./routes/transcriptionRoutes')
 
 dotenv.config()
+
+console.log('MONGO_URI:', process.env.MONGO_URI) // debug line
 connectDB()
 
 const app = express()

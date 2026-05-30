@@ -23,15 +23,26 @@ const saveTranscription = async (req, res) => {
 const uploadAudio = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' })
-    const fileBuffer = fs.readFileSync(req.file.path)
-    const fileName = `recordings/${req.file.filename}`
+
+    // Use buffer instead of file path (Vercel doesn't have disk access)
+    const fileName = `recordings/${Date.now()}-recording.webm`
+
     const { error: uploadError } = await supabase.storage
-      .from('audio-files').upload(fileName, fileBuffer, { contentType: req.file.mimetype })
+      .from('audio-files')
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype
+      })
+
     if (uploadError) throw new Error(uploadError.message)
-    const { data: { publicUrl } } = supabase.storage.from('audio-files').getPublicUrl(fileName)
-    fs.unlinkSync(req.file.path)
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('audio-files')
+      .getPublicUrl(fileName)
+
     res.status(200).json({ success: true, audioUrl: publicUrl })
+
   } catch (error) {
+    console.error('Upload error:', error)
     res.status(500).json({ error: error.message })
   }
 }

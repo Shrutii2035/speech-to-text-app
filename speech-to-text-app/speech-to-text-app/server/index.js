@@ -18,8 +18,13 @@ app.use(express.json())
 
 // Connect DB before every request
 app.use(async (req, res, next) => {
-  await connectDB()
-  next()
+  try {
+    await connectDB()
+    next()
+  } catch (error) {
+    console.error('DB connection failed:', error.message)
+    res.status(500).json({ error: 'Database connection failed' })
+  }
 })
 
 app.use('/api/transcriptions', transcriptionRoutes)

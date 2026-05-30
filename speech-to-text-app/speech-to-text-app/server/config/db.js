@@ -1,20 +1,24 @@
 const mongoose = require('mongoose')
 
+let isConnected = false
+
 const connectDB = async () => {
+  if (isConnected) return
+
   try {
     const uri = process.env.MONGO_URI
+    if (!uri) throw new Error('MONGO_URI is not defined')
 
-    if (!uri) {
-      console.error('MONGO_URI is undefined! Check environment variables.')
-      process.exit(1)
-    }
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+    })
 
-    console.log('Connecting to MongoDB with URI:', uri.substring(0, 20) + '...')
-    const conn = await mongoose.connect(uri)
-    console.log(`MongoDB Connected: ${conn.connection.host} ✅`)
+    isConnected = true
+    console.log('MongoDB Connected ✅')
   } catch (error) {
-    console.error(`MongoDB Error: ${error.message} ❌`)
-    process.exit(1)
+    console.error(`MongoDB Error: ${error.message}`)
+    // Don't call process.exit(1) in serverless!
   }
 }
 

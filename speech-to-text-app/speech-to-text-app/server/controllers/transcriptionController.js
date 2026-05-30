@@ -4,18 +4,24 @@ const { supabase } = require('../config/supabase')
 
 const saveTranscription = async (req, res) => {
   try {
+    console.log('Save request body:', req.body)
     const { transcript, language, duration, source, userId } = req.body
+
     if (!transcript) return res.status(400).json({ error: 'No transcript provided' })
     if (!userId) return res.status(400).json({ error: 'No user ID provided' })
 
+    console.log('Creating record for userId:', userId)
     const wordCount = transcript.trim().split(/\s+/).length
     const record = await Transcription.create({
       userId, transcript, language: language || 'en',
-      duration: duration || 0, wordCount, source: source || 'recording',
+      duration: duration || 0, wordCount,
+      source: source || 'recording',
       originalFilename: `${source || 'recording'}-${Date.now()}.webm`
     })
+    console.log('Record created:', record._id)
     res.status(201).json({ success: true, data: record })
   } catch (error) {
+    console.error('Save error:', error.message)
     res.status(500).json({ error: error.message })
   }
 }
